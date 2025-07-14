@@ -1,0 +1,10 @@
+google-adk
+vertexai
+python-dotenv
+streamlit
+requests
+fastapi
+uvicorn
+google-generativeai
+psycopg2
+bcrypt
