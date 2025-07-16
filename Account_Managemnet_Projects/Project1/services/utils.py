@@ -177,9 +177,9 @@ def get_instruction():
         - update_contact: update contact
         - update_address : update address
         List the tool details to user to choose the correct tool.
-        if state["otp_status"] is None, then assume that all OTP related task has either not started or is over. 
-            - Dont prompt again the OTP verification failed after every input of user
-            Then only Dont ask for OTP if state.otp_status is not OTP_PENDING
+        Always check otp_status flag in session state to decide the next action
+        if state["otp_status"] is None, resume normal flow
+         
         
         """
     logger.info(f"Instruction {instruction}")

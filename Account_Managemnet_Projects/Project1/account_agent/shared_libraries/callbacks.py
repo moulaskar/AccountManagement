@@ -199,6 +199,7 @@ def verify_otp(state, username, user_otp_input, tool_name, args):
         }
 
     # OTP verified successfully
+    state["otp_status"] = "OPT_VERIFIED_SUCCESS"
     logger.info(f"OTP for {username} verified successfully.")
     state.pop(username, None)
 

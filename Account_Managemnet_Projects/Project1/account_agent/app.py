@@ -154,12 +154,16 @@ async def chat_with_agent(request: Request):
                 logger.info(f"Verifying OTP for with tool name {state['pending_tool']} and arguments = {state['pending_args']}")
                 result = verify_otp(state, message, tool_name)
                 logger.info(f"verify_otp Result :   {result}")
+                status = result["status"]
+                session.state["otp_status"] = status
                 if state["otp_status"] == "OPT_VERIFIED_SUCCESS":
                     #state["otp_status"] = None
                     logger.info(f"OPT_VERIFIED_SUCCESS for with tool name {state['pending_tool']} and arguments = {state['pending_args']}")
                     pending_args = state["pending_args"]
                     result = update_customer_account(state)
-                    session_service.state = reset_state(state)
+                    logger.info(f"update_customer_account - state = {state}")
+                    session.state = reset_state(state)
+                    logger.info(f"reset_state - session_service.state = {session.state}")
                     message = "OTP Verification is Successful and so is the update Update Successful. Would you like to continue?" + get_instruction()
                     session.state["conversation"] = {}
                     session.state["conversation"] = message
@@ -170,46 +174,47 @@ async def chat_with_agent(request: Request):
                     session.state["conversation"] = message
                 
                     
-                    # Step 1: Clear OTP state
-                    cleared_delta = {
-                        "pending_tool": None,
-                        "pending_args": None,
-                        "otp_status": None,
-                        "generated_otp": None,
-                        "otp_timestamp": None
-                    }
-                    await session_service.append_event(
-                        session,
-                        Event(
-                            invocation_id="manual-clear",
-                            author="account_agent",
-                            timestamp=time.time(),
-                            actions=EventActions(state_delta=cleared_delta)
-                        )
+                # Step 1: Clear OTP state
+                cleared_delta = {
+                    "pending_tool": None,
+                    "pending_args": None,
+                    "otp_status": None,
+                    "generated_otp": None,
+                    "otp_timestamp": None
+                }
+
+                # Step 2: Reset conversation
+                #system_message = get_instruction()
+                await session_service.append_event(
+                    session,
+                    Event(
+                        invocation_id="manual-reset",
+                        author="account_agent",
+                        timestamp=time.time(),
+                        actions=EventActions(state_delta=cleared_delta),
+                        content=types.Content(parts=[types.Part(text=message)])
                     )
+                )
+                session.state = get_initial_state(user_id, session_id)
+                await call_agent_async(runner, user_id, session_id, message)
+                logger.info(f"[CALL_AGENT] OPT_VERIFIED_SUCCESS Completed for session_id: {session_id}")
+                    # Reload updated session state
+                updated_session = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
+                last_response = updated_session.state.get("conversation", "Sorry, I didn't understand that.")
 
-                    # Step 2: Reset conversation
-                    system_message = get_instruction()
-                    await session_service.append_event(
-                        session,
-                        Event(
-                            invocation_id="manual-reset",
-                            author="account_agent",
-                            timestamp=time.time(),
-                            content=types.Content(parts=[types.Part(text=system_message)])
-                        )
-                    )
-        
-        # --- Normal Chat Processing ---
-        logger.info(f"Working on {message} for session_id: {session_id}")
-        await call_agent_async(runner, user_id, session_id, message)
-        logger.info(f"[CALL_AGENT] Completed for session_id: {session_id}")
+                return {"session_id": session_id, "response": last_response}
+        else:
+            # --- Normal Chat Processing ---
+            logger.info(f"Working on {message} for session_id: {session_id}")
+            await call_agent_async(runner, user_id, session_id, message)
+            logger.info(f"[CALL_AGENT] Completed for session_id: {session_id}")
+       
 
-        # Reload updated session state
-        updated_session = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
-        last_response = updated_session.state.get("conversation", "Sorry, I didn't understand that.")
+            # Reload updated session state
+            updated_session = await session_service.get_session(app_name=app_name, user_id=user_id, session_id=session_id)
+            last_response = updated_session.state.get("conversation", "Sorry, I didn't understand that.")
 
-        return {"session_id": session_id, "response": last_response}
+            return {"session_id": session_id, "response": last_response}
         #---------------------------------
         
     except Exception as e:
